@@ -19,18 +19,27 @@ One command. Full project. Ready to build.
 
 ## Quick install
 
+**macOS / Linux:**
 ```bash
-git clone https://github.com/niravbhatt/dhoom.git
+git clone https://github.com/niravbhatt1317/dhoom.git
 cd dhoom
 ./install.sh
-source ~/.zshrc
+source ~/.zshrc   # or ~/.bashrc depending on your shell
 ```
 
-`install.sh` will:
+**Windows (PowerShell):**
+```powershell
+git clone https://github.com/niravbhatt1317/dhoom.git
+cd dhoom
+.\install.ps1
+. $PROFILE
+```
+
+The installer will:
 - Ask where you want to store your projects (default: `~/Claude-Projects`)
 - Create that folder and any starter subfolders you name
-- Install the `/dhoom` Claude Code skill globally
-- Add a `dhoom` shell alias to `~/.zshrc`
+- Install the `/dhoom` Claude Code skill globally (works on all platforms)
+- Add a `dhoom` command to your shell (`~/.zshrc`, `~/.bashrc`, or PowerShell profile)
 
 ---
 
@@ -99,6 +108,18 @@ PROJECTS_ROOT="/path/to/your/projects"
 
 ---
 
+## Platform support
+
+dhoom auto-detects your OS and does the right thing:
+
+| Feature | macOS | Linux | Windows |
+|---------|-------|-------|---------|
+| Full scaffold (npm, Tailwind, git) | ✓ | ✓ | ✓ |
+| `/dhoom` Claude skill | ✓ | ✓ | ✓ |
+| `dhoom` terminal command | ✓ (bash) | ✓ (bash) | ✓ (PowerShell) |
+| Auto-open new terminal | Terminal.app | gnome-terminal / konsole / xterm | Windows Terminal / PowerShell |
+| Install script | `install.sh` | `install.sh` | `install.ps1` |
+
 ## Requirements
 
 | Tool | Why |
@@ -106,7 +127,7 @@ PROJECTS_ROOT="/path/to/your/projects"
 | Node + npm | Runs the Vite scaffold and installs packages |
 | git | Initialises the repo and makes the initial commit |
 | [Claude Code CLI](https://claude.ai/code) | Opens the new project session with remote control |
-| macOS | The auto-open Terminal step uses `osascript` — on Linux/Windows you'll get a manual `cd` command to run instead |
+| PowerShell 5.1+ | Windows only — 7+ recommended for full colour support |
 | `gh` (optional) | Only needed if you use the `/publish` skill to push to GitHub |
 
 ---

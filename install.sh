@@ -76,15 +76,28 @@ success "Skill installed → type /dhoom in any Claude Code session"
 # ── Step 4: Add shell alias ────────────────────────────────────────────────────
 step "Adding shell alias"
 ALIAS_LINE="alias dhoom='bash \"$SCRIPT_DIR/dhoom.sh\"'"
-ZSHRC="$HOME/.zshrc"
 
-if grep -qF "alias dhoom=" "$ZSHRC" 2>/dev/null; then
-  warn "alias dhoom already exists in ~/.zshrc — skipping"
+# Detect which shell rc file to use
+if [[ "$SHELL" == */zsh ]] || [[ -n "${ZSH_VERSION:-}" ]]; then
+  RC_FILE="$HOME/.zshrc"
+elif [[ "$SHELL" == */bash ]] || [[ -n "${BASH_VERSION:-}" ]]; then
+  # Prefer .bash_profile on macOS, .bashrc on Linux
+  if [[ "$(uname)" == "Darwin" ]]; then
+    RC_FILE="$HOME/.bash_profile"
+  else
+    RC_FILE="$HOME/.bashrc"
+  fi
 else
-  echo "" >> "$ZSHRC"
-  echo "# dhoom — project scaffold tool" >> "$ZSHRC"
-  echo "$ALIAS_LINE" >> "$ZSHRC"
-  success "Alias added to ~/.zshrc"
+  RC_FILE="$HOME/.profile"
+fi
+
+if grep -qF "alias dhoom=" "$RC_FILE" 2>/dev/null; then
+  warn "alias dhoom already exists in $RC_FILE — skipping"
+else
+  echo "" >> "$RC_FILE"
+  echo "# dhoom — project scaffold tool" >> "$RC_FILE"
+  echo "$ALIAS_LINE" >> "$RC_FILE"
+  success "Alias added to $RC_FILE"
 fi
 
 # ── Done ───────────────────────────────────────────────────────────────────────
@@ -92,7 +105,7 @@ echo ""
 echo -e "${GREEN}${BOLD}All set! Here's what you've got:${RESET}"
 echo -e "   ${CYAN}Projects root:${RESET} $PROJECTS_ROOT"
 echo -e "   ${CYAN}Claude skill:${RESET}  /dhoom  (in any Claude Code session)"
-echo -e "   ${CYAN}Terminal alias:${RESET} dhoom   (after running: source ~/.zshrc)"
+echo -e "   ${CYAN}Terminal alias:${RESET} dhoom   (after running: source $RC_FILE)"
 echo ""
-echo -e "${DIM}  Run ${BOLD}source ~/.zshrc${RESET}${DIM} then type ${BOLD}dhoom${RESET}${DIM} to create your first project.${RESET}"
+echo -e "${DIM}  Run ${BOLD}source $RC_FILE${RESET}${DIM} then type ${BOLD}dhoom${RESET}${DIM} to create your first project.${RESET}"
 echo ""

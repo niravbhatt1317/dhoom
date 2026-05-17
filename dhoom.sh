@@ -376,10 +376,32 @@ success "Git initialized with initial commit"
 curl -s http://localhost:3030/api/projects > /dev/null 2>&1 || true
 
 # ── Step 10: Open Claude ───────────────────────────────────────────────────────
-osascript \
-  -e "tell application \"Terminal\" to do script \"cd '$PROJECT_PATH' && claude --remote-control '$PROJECT_NAME' '.'\"" \
-  -e "tell application \"Terminal\" to activate" 2>/dev/null || \
-  warn "Could not open Terminal automatically. Run: cd '$PROJECT_PATH' && claude --remote-control '$PROJECT_NAME'"
+CMD="cd '$PROJECT_PATH' && claude --remote-control '$PROJECT_NAME' '.'"
+OPENED=0
+
+if [[ "$OSTYPE" == "darwin"* ]]; then
+  # macOS — use Terminal.app via AppleScript
+  osascript \
+    -e "tell application \"Terminal\" to do script \"$CMD\"" \
+    -e "tell application \"Terminal\" to activate" 2>/dev/null && OPENED=1
+
+elif [[ "$OSTYPE" == "linux"* ]]; then
+  # Linux — try common terminal emulators in order
+  if command -v gnome-terminal &>/dev/null; then
+    gnome-terminal -- bash -c "$CMD; exec bash" 2>/dev/null && OPENED=1
+  elif command -v konsole &>/dev/null; then
+    konsole --noclose -e bash -c "$CMD" 2>/dev/null && OPENED=1
+  elif command -v xfce4-terminal &>/dev/null; then
+    xfce4-terminal --hold -e "bash -c \"$CMD\"" 2>/dev/null && OPENED=1
+  elif command -v xterm &>/dev/null; then
+    xterm -e bash -c "$CMD; exec bash" 2>/dev/null && OPENED=1
+  fi
+fi
+
+if [[ "$OPENED" == "0" ]]; then
+  warn "Could not open a terminal automatically."
+  echo -e "  ${DIM}Run manually:${RESET} cd '$PROJECT_PATH' && claude --remote-control '$PROJECT_NAME'"
+fi
 
 # ── Done ───────────────────────────────────────────────────────────────────────
 echo ""
