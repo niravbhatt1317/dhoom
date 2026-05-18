@@ -2,22 +2,19 @@
 # dhoom — scaffold a new React + TS + Vite + Tailwind project
 set -euo pipefail
 
-# ── Config (set by install.sh, override anytime) ───────────────────────────────
-DHOOM_CONFIG="$HOME/.dhoom/config"
-if [[ -f "$DHOOM_CONFIG" ]]; then
-  # shellcheck source=/dev/null
-  source "$DHOOM_CONFIG"
-fi
-PROJECTS_ROOT="${PROJECTS_ROOT:-$HOME/Claude-Projects}"
+PROJECTS_ROOT="$HOME/Claude-Projects"
+MANAGER_CONFIG="$PROJECTS_ROOT/.manager/config.json"
 
 # ── Colours ────────────────────────────────────────────────────────────────────
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
 CYAN='\033[0;36m'; BOLD='\033[1m'; DIM='\033[2m'; RESET='\033[0m'
 
+trap 'printf "\033[?25h"; stty sane 2>/dev/null || true' EXIT INT TERM
 info()    { echo -e "${CYAN}→${RESET} $*"; }
 success() { echo -e "${GREEN}✓${RESET} $*"; }
 warn()    { echo -e "${YELLOW}!${RESET} $*"; }
 die()     { echo -e "${RED}✗${RESET} $*" >&2; exit 1; }
+header()  { echo -e "\n${BOLD}$*${RESET}"; }
 
 # ── Sanitise project name ──────────────────────────────────────────────────────
 sanitize_name() {
@@ -111,6 +108,7 @@ run_fun() {
     local msg timer
 
     if (( elapsed < estimate )); then
+      # Before estimate: show regular funny messages + countdown
       msg="${MSGS[$mi]}"
       local remaining=$(( estimate - elapsed ))
       timer="${DIM}~${remaining}s left${RESET}"
@@ -120,6 +118,7 @@ run_fun() {
         mi=$(( (mi + 1) % ${#MSGS[@]} ))
       fi
     else
+      # Over estimate: flip to "overtime" messages + elapsed
       msg="${LATE_MSGS[$lmi]}"
       timer="${YELLOW}${elapsed}s · running long${RESET}"
       ltick=$(( ltick + 1 ))
@@ -184,40 +183,30 @@ done
 
 # ── Step 2: Group folder ───────────────────────────────────────────────────────
 
-# ── Customise for your setup ───────────────────────────────────────────────────
-# Add friendly display names and descriptions for your own folders.
-# Example:
-#   Work)     echo "Work" ;;
-#   Personal) echo "Personal" ;;
+# Friendly display name for each known folder (bash 3.2 safe — no associative arrays)
 folder_display_name() {
   case "$1" in
-    *) echo "$1" ;;
+    Service-ops)       echo "Service Ops" ;;
+    Observe-ops)       echo "Observe Ops" ;;
+    Mtdt-experiments)  echo "Motadata Experiments" ;;
+    Personal)          echo "Personal" ;;
+    *)                 echo "$1" ;;
   esac
 }
 
-# Example:
-#   Work)     echo "Client projects and day-job work" ;;
-#   Personal) echo "Side projects and experiments" ;;
+# One-liner description for each known folder
 folder_desc() {
   case "$1" in
-    *) echo "" ;;
+    Service-ops)       echo "ITSM design — ticket workflows, service desk interfaces, support tooling" ;;
+    Observe-ops)       echo "IT monitoring design — AI Insight Hub, observability dashboards, alert interfaces" ;;
+    Mtdt-experiments)  echo "Cross-product work — design systems, shared components, exploratory R&D" ;;
+    Personal)          echo "Just for you — side projects, experiments, anything that gives you wings" ;;
+    *)                 echo "" ;;
   esac
 }
-# ──────────────────────────────────────────────────────────────────────────────
-
-echo ""
-echo -e "${BOLD}  Where does this one live?${RESET}"
-echo -e "${DIM}  Pick a home for your project.${RESET}"
-
-# Guard: projects root must exist
-if [[ ! -d "$PROJECTS_ROOT" ]]; then
-  echo ""
-  warn "Projects folder not found at $PROJECTS_ROOT"
-  echo -e "  ${DIM}Run ${BOLD}./install.sh${RESET}${DIM} to set it up, or create the folder manually.${RESET}"
-  exit 1
-fi
 
 # Collect group folders — glob expansion avoids ls alias / word-splitting issues
+[[ -d "$PROJECTS_ROOT" ]] || die "Claude-Projects folder not found at $PROJECTS_ROOT"
 RAW_FOLDERS=()
 for dir in "$PROJECTS_ROOT"/*/; do
   [[ -d "$dir" ]] || continue
@@ -228,61 +217,162 @@ for dir in "$PROJECTS_ROOT"/*/; do
   esac
   RAW_FOLDERS+=("$name")
 done
+[[ ${#RAW_FOLDERS[@]} -eq 0 ]] && die "No group folders found in $PROJECTS_ROOT"
 
-# Edge case: no subfolders yet — offer to create the first one
-if [[ ${#RAW_FOLDERS[@]} -eq 0 ]]; then
-  echo ""
-  warn "No folders found in $PROJECTS_ROOT yet."
-  echo -e "  ${DIM}What do you want to call your first one? (e.g. Personal, Work)${RESET}"
-  printf "  → "
-  read -r FIRST_FOLDER
-  FIRST_FOLDER=$(sanitize_name "$FIRST_FOLDER")
-  [[ -z "$FIRST_FOLDER" ]] && die "Need at least one folder to continue."
-  mkdir -p "$PROJECTS_ROOT/$FIRST_FOLDER"
-  success "Created folder: $FIRST_FOLDER"
-  RAW_FOLDERS=("$FIRST_FOLDER")
-fi
+# Sort into preferred order: known folders first, then any extras alphabetically
+PREFERRED_ORDER=("Service-ops" "Observe-ops" "Mtdt-experiments" "Personal")
+FOLDERS=()
+for preferred in "${PREFERRED_ORDER[@]}"; do
+  for f in "${RAW_FOLDERS[@]}"; do
+    [[ "$f" == "$preferred" ]] && FOLDERS+=("$f") && break
+  done
+done
+for f in "${RAW_FOLDERS[@]}"; do
+  found=0
+  for preferred in "${PREFERRED_ORDER[@]}"; do
+    [[ "$f" == "$preferred" ]] && found=1 && break
+  done
+  if [[ "$found" == "0" ]]; then FOLDERS+=("$f"); fi
+done
 
-FOLDERS=("${RAW_FOLDERS[@]}")
+# Arrow-key picker ─────────────────────────────────────────────────────────────
+PICKER_ITEMS=("${FOLDERS[@]}" "__NEW__")
+PICKER_COUNT=${#PICKER_ITEMS[@]}
+PICKER_LINES=$(( PICKER_COUNT * 3 ))  # each item: blank + name + desc
+
+_render_picker() {
+  local sel=$1 i=0 item display desc
+  for item in "${PICKER_ITEMS[@]}"; do
+    if [[ "$item" == "__NEW__" ]]; then
+      display="${BOLD}+ New folder${RESET}"
+      desc="Create a brand-new home for this project"
+    else
+      display="${BOLD}$(folder_display_name "$item")${RESET}"
+      desc="$(folder_desc "$item")"
+    fi
+    echo ""
+    if [[ $i -eq $sel ]]; then
+      echo -e "  ${CYAN}→${RESET} ${display}"
+    else
+      echo -e "    ${display}"
+    fi
+    echo -e "      ${DIM}${desc}${RESET}"
+    i=$(( i + 1 ))
+  done
+}
+
+_KEY=""
+_read_key() {
+  _KEY=""
+  local char="" rest=""
+  IFS= read -r -s -n1 char || true
+  case "$char" in
+    $'\033')
+      # Read the next 2 bytes together — avoids timing issues with separate reads
+      # bash 3.2 (macOS default) only accepts integer timeouts; 1s is fine since
+      # the bytes after ESC arrive instantly when an arrow key is pressed
+      IFS= read -r -s -n2 -t 1 rest || true
+      case "$rest" in
+        '[A') _KEY="UP" ;;
+        '[B') _KEY="DOWN" ;;
+      esac
+      ;;
+    '') _KEY="ENTER" ;;
+  esac
+}
+
+SEL=0
+_PICK_ROW=1
+GROUP=""
+DISPLAY_GROUP=""
+
+_picker_update() {
+  # Rewrite only the two name lines that changed (old → deselected, new → selected).
+  # Item i's name line is at: _PICK_ROW + i*3 + 1
+  local old_sel=$1 new_sel=$2
+  local item row display
+
+  item="${PICKER_ITEMS[$old_sel]}"
+  row=$(( _PICK_ROW + old_sel * 3 + 1 ))
+  [[ "$item" == "__NEW__" ]] && display="${BOLD}+ New folder${RESET}" \
+    || display="${BOLD}$(folder_display_name "$item")${RESET}"
+  printf "\033[%d;1H\033[2K" "$row"
+  echo -e "    ${display}"
+
+  item="${PICKER_ITEMS[$new_sel]}"
+  row=$(( _PICK_ROW + new_sel * 3 + 1 ))
+  [[ "$item" == "__NEW__" ]] && display="${BOLD}+ New folder${RESET}" \
+    || display="${BOLD}$(folder_display_name "$item")${RESET}"
+  printf "\033[%d;1H\033[2K" "$row"
+  echo -e "  ${CYAN}→${RESET} ${display}"
+}
 
 echo ""
-i=1
-for g in "${FOLDERS[@]}"; do
-  display=$(folder_display_name "$g")
-  desc=$(folder_desc "$g")
-  echo -e "  ${CYAN}${BOLD}$i)${RESET} ${BOLD}${display}${RESET}"
-  [[ -n "$desc" ]] && echo -e "     ${DIM}${desc}${RESET}"
-  echo ""
-  i=$(( i + 1 ))
-done
-echo -e "  ${CYAN}${BOLD}$i)${RESET} ${BOLD}+ New folder${RESET}"
-echo -e "     ${DIM}Create a brand-new home for this project${RESET}"
-NEW_OPT=$i
+echo -e "${BOLD}  Where does this one live?${RESET}"
+echo -e "${DIM}  ↑ ↓ to move  ·  Enter to select${RESET}"
 
+# Pre-reserve space so terminal scrolling happens before the position query
+_pi=0
+while [[ $_pi -lt $PICKER_LINES ]]; do echo ""; _pi=$(( _pi + 1 )); done
+printf "\033[%dA" "$PICKER_LINES"
+
+# Query cursor row. stty -echo must come FIRST — without it the terminal
+# echoes the response (e.g. ^[[16;1R) to the screen before read can read it.
+_old_stty=$(stty -g 2>/dev/null)
+stty -echo 2>/dev/null || true
+printf '\033[6n'
+IFS='[;' read -r -d 'R' _ _PICK_ROW _ 2>/dev/null || true
+stty "$_old_stty" 2>/dev/null || true
+[[ "$_PICK_ROW" =~ ^[0-9]+$ ]] || _PICK_ROW=1
+
+printf '\033[?25l'   # hide cursor for the duration of the picker
+_render_picker $SEL
+_OLD_SEL=$SEL
+
+# One loop handles navigation + the new-folder prompt.
+# "Go back" clears only the lines below the list and falls through —
+# no outer loop means the header is never reprinted.
 while true; do
-  printf "\n  → "
-  read -r CHOICE
-  CHOICE="${CHOICE:-1}"
-
-  if [[ "$CHOICE" =~ ^[0-9]+$ ]] && (( CHOICE >= 1 && CHOICE < NEW_OPT )); then
-    GROUP="${FOLDERS[$((CHOICE-1))]}"
-    DISPLAY_GROUP=$(folder_display_name "$GROUP")
-    success "Dropping it in ${DISPLAY_GROUP}."
-    break
-  elif [[ "$CHOICE" == "$NEW_OPT" ]]; then
-    printf "  Name the new folder: "
-    read -r NEW_FOLDER
-    NEW_FOLDER=$(sanitize_name "$NEW_FOLDER")
-    [[ -z "$NEW_FOLDER" ]] && warn "Needs a name." && continue
-    GROUP="$NEW_FOLDER"
-    DISPLAY_GROUP="$GROUP"
-    mkdir -p "$PROJECTS_ROOT/$GROUP"
-    success "New folder ready: $GROUP"
-    break
-  else
-    warn "Pick a number from 1 to $NEW_OPT."
-  fi
+  _read_key
+  case "$_KEY" in
+    UP)
+      _OLD_SEL=$SEL
+      SEL=$(( (SEL - 1 + PICKER_COUNT) % PICKER_COUNT ))
+      _picker_update $_OLD_SEL $SEL
+      ;;
+    DOWN)
+      _OLD_SEL=$SEL
+      SEL=$(( (SEL + 1) % PICKER_COUNT ))
+      _picker_update $_OLD_SEL $SEL
+      ;;
+    ENTER)
+      if [[ "${PICKER_ITEMS[$SEL]}" == "__NEW__" ]]; then
+        while true; do
+          printf "\033[%d;1H\033[J" $(( _PICK_ROW + PICKER_LINES ))
+          echo ""
+          printf "  ${BOLD}New folder name:${RESET} ${DIM}(empty → go back)${RESET}  → "
+          IFS= read -r NEW_FOLDER
+          [[ -z "$NEW_FOLDER" ]] && break              # go back to picker
+          NEW_FOLDER=$(sanitize_name "$NEW_FOLDER")
+          [[ -z "$NEW_FOLDER" ]] && continue           # invalid — prompt again
+          GROUP="$NEW_FOLDER"
+          DISPLAY_GROUP="$GROUP"
+          mkdir -p "$PROJECTS_ROOT/$GROUP"
+          success "New folder ready: $GROUP"
+          break 2
+        done
+        # Clear prompt lines so picker area looks clean on return
+        printf "\033[%d;1H\033[J" $(( _PICK_ROW + PICKER_LINES ))
+      else
+        GROUP="${PICKER_ITEMS[$SEL]}"
+        DISPLAY_GROUP=$(folder_display_name "$GROUP")
+        success "Dropping it in ${DISPLAY_GROUP}."
+        break
+      fi
+      ;;
+  esac
 done
+printf '\033[?25h'   # restore cursor
 
 PROJECT_PATH="$PROJECTS_ROOT/$GROUP/$PROJECT_NAME"
 
@@ -372,36 +462,39 @@ git add .
 git commit -q -m "chore: initial React + TS + Vite + Tailwind v4 setup"
 success "Git initialized with initial commit"
 
-# ── Step 9: Notify Project Manager (if running) ───────────────────────────────
+# ── Step 9: Notify Project Manager ────────────────────────────────────────────
+# Projects under ~/Claude-Projects/ are auto-scanned — just trigger a refresh
 curl -s http://localhost:3030/api/projects > /dev/null 2>&1 || true
 
 # ── Step 10: Open Claude ───────────────────────────────────────────────────────
-CMD="cd '$PROJECT_PATH' && claude --remote-control '$PROJECT_NAME' '.'"
-OPENED=0
-
-if [[ "$OSTYPE" == "darwin"* ]]; then
-  # macOS — use Terminal.app via AppleScript
-  osascript \
-    -e "tell application \"Terminal\" to do script \"$CMD\"" \
-    -e "tell application \"Terminal\" to activate" 2>/dev/null && OPENED=1
-
-elif [[ "$OSTYPE" == "linux"* ]]; then
-  # Linux — try common terminal emulators in order
-  if command -v gnome-terminal &>/dev/null; then
-    gnome-terminal -- bash -c "$CMD; exec bash" 2>/dev/null && OPENED=1
-  elif command -v konsole &>/dev/null; then
-    konsole --noclose -e bash -c "$CMD" 2>/dev/null && OPENED=1
-  elif command -v xfce4-terminal &>/dev/null; then
-    xfce4-terminal --hold -e "bash -c \"$CMD\"" 2>/dev/null && OPENED=1
-  elif command -v xterm &>/dev/null; then
-    xterm -e bash -c "$CMD; exec bash" 2>/dev/null && OPENED=1
-  fi
-fi
-
-if [[ "$OPENED" == "0" ]]; then
-  warn "Could not open a terminal automatically."
-  echo -e "  ${DIM}Run manually:${RESET} cd '$PROJECT_PATH' && claude --remote-control '$PROJECT_NAME'"
-fi
+_CMD="cd '$PROJECT_PATH' && claude --remote-control '$PROJECT_NAME' '.'"
+case "$OSTYPE" in
+  darwin*)
+    osascript \
+      -e "tell application \"Terminal\" to do script \"$_CMD\"" \
+      -e "tell application \"Terminal\" to activate" 2>/dev/null || \
+      warn "Could not open Terminal automatically. Run: $_CMD"
+    ;;
+  linux*)
+    if command -v gnome-terminal &>/dev/null; then
+      gnome-terminal -- bash -c "$_CMD; exec bash" 2>/dev/null &
+    elif command -v xterm &>/dev/null; then
+      xterm -e "bash -c '$_CMD; exec bash'" 2>/dev/null &
+    elif command -v konsole &>/dev/null; then
+      konsole -e bash -c "$_CMD; exec bash" 2>/dev/null &
+    else
+      warn "Could not detect a terminal emulator. Run: $_CMD"
+    fi
+    ;;
+  msys*|cygwin*)
+    # Git Bash / Cygwin on Windows
+    start cmd //k "$_CMD" 2>/dev/null || \
+      warn "Could not open terminal. Run: $_CMD"
+    ;;
+  *)
+    warn "Platform not supported for auto-open. Run: $_CMD"
+    ;;
+esac
 
 # ── Done ───────────────────────────────────────────────────────────────────────
 echo ""

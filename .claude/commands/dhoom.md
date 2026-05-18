@@ -1,6 +1,4 @@
-Scaffold a new dhoom project: React + TypeScript + Vite + Tailwind CSS v4, with CLAUDE.md, a /publish skill, git init, and a remote-control Claude session.
-
-Read ~/.dhoom/config if it exists to find PROJECTS_ROOT (default: ~/Claude-Projects).
+Scaffold a new React + TypeScript + Vite + Tailwind CSS v4 project under ~/Claude-Projects/.
 
 ---
 
@@ -8,52 +6,75 @@ Read ~/.dhoom/config if it exists to find PROJECTS_ROOT (default: ~/Claude-Proje
 
 Ask the user: "What are we calling this thing?"
 
-Sanitize the input into a slug: lowercase, replace non-alphanumeric chars with hyphens, collapse consecutive hyphens, strip leading/trailing hyphens.
+Sanitize the input into a slug:
+- Lowercase everything
+- Replace any non-alphanumeric character with a hyphen
+- Collapse consecutive hyphens into one
+- Strip leading and trailing hyphens
 
-Show the slug and confirm before continuing.
+Show the slug and confirm with the user before continuing.
 
 ---
 
 ## Step 2 — Group folder
 
-Read PROJECTS_ROOT from ~/.dhoom/config, or default to ~/Claude-Projects.
+Scan `~/Claude-Projects/` for immediate subdirectories. Skip: `.manager`, `.claude`, `node_modules`, `.git`.
 
-If PROJECTS_ROOT doesn't exist, tell the user to run install.sh first and stop.
+Sort them in this preferred order (others go at the end):
+1. Service-ops → **Service Ops** — ITSM design: ticket workflows, service desk interfaces, support tooling
+2. Observe-ops → **Observe Ops** — IT monitoring: AI Insight Hub, observability dashboards, alert interfaces
+3. Mtdt-experiments → **Motadata Experiments** — cross-product work: design systems, shared components, R&D
+4. Personal → **Personal** — just for you: side projects, experiments, anything that gives you wings
 
-Scan PROJECTS_ROOT for immediate subdirectories. Skip: .manager, .claude, node_modules, .git.
+Present the list with friendly names and one-line descriptions. Offer a "+ New folder" option at the end.
 
-If no subfolders exist, ask the user to name their first one, create it with mkdir, and use it.
+Ask the user to pick one. If they choose new folder, ask for a name, sanitize it, and `mkdir -p ~/Claude-Projects/<name>`.
 
-Present the folders numbered. Add a "+ New folder" option at the end. Ask which to use.
+> **Note:** When running as the `dhoom` bash script, this step uses an interactive arrow-key picker (↑ ↓ to move, Enter to select). When running as a Claude skill, present the list conversationally and let the user type their choice.
 
 ---
 
 ## Step 3 — Scaffold Vite project
 
+**macOS / Linux / WSL / Git Bash:**
 ```bash
-cd <PROJECTS_ROOT>/<group>/
-echo y | npm create vite@latest <slug> -- --template react-ts --yes
+cd ~/Claude-Projects/<group>/
+npm create vite@latest <slug> -- --template react-ts --yes
 ```
 
-Tell the user this may take a minute.
+**Windows (PowerShell / cmd):**
+```powershell
+cd "$HOME\Claude-Projects\<group>"
+npm create vite@latest <slug> -- --template react-ts --yes
+```
+
+Tell the user each step is running and may take a minute.
 
 ---
 
 ## Step 4 — Install dependencies
 
+**macOS / Linux / WSL / Git Bash:**
 ```bash
-cd <PROJECTS_ROOT>/<group>/<slug>/
+cd ~/Claude-Projects/<group>/<slug>/
 npm install
 npm install -D tailwindcss @tailwindcss/vite
 ```
 
-Run sequentially. Inform the user after each one finishes.
+**Windows (PowerShell / cmd):**
+```powershell
+cd "$HOME\Claude-Projects\<group>\<slug>"
+npm install
+npm install -D tailwindcss @tailwindcss/vite
+```
+
+Run these sequentially. Inform the user as each finishes.
 
 ---
 
 ## Step 5 — Configure Tailwind v4
 
-Rewrite `vite.config.ts`:
+Rewrite `vite.config.ts` to:
 ```ts
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
@@ -64,7 +85,7 @@ export default defineConfig({
 })
 ```
 
-Replace `src/index.css` with:
+Replace `src/index.css` entirely with:
 ```css
 @import "tailwindcss";
 ```
@@ -73,7 +94,7 @@ Replace `src/index.css` with:
 
 ## Step 6 — Create CLAUDE.md
 
-Create `CLAUDE.md` at the project root. Derive the display name by title-casing the slug (hyphens → spaces, capitalize each word):
+Create `CLAUDE.md` at the project root. Use the display name (title-cased from slug):
 
 ```
 **Instruction (act on this immediately):** The user just created this project with dhoom. Greet them warmly, tell them the stack is ready, and ask what they want to build or explore today. Get even a rough idea, then suggest a first step to start building it.
@@ -95,27 +116,37 @@ _Not set yet — ask the user._
 
 ## Step 7 — Create /publish skill
 
-Create `.claude/commands/publish.md` inside the project:
+Create `.claude/commands/publish.md` inside the new project:
 
 ```
 Push this project to a new GitHub repository.
 
 Steps:
-1. Check git status — if uncommitted changes exist, ask whether to commit first.
-2. Ask: public or private repo?
+1. Check git status — if there are uncommitted changes, ask whether to commit them first with a short message.
+2. Ask: should the repo be public or private?
 3. Confirm the repo name (default: current directory name).
 4. Run: gh repo create <name> --<public|private> --source=. --remote=origin --push
-5. Show the new repo URL.
+5. Show the new repo URL when done.
 
 If `gh` is not authenticated, tell the user to run `gh auth login` first.
-If remote "origin" already exists, skip creation and run: git push -u origin main
+If a remote named "origin" already exists, skip repo creation and just run: git push -u origin main
 ```
 
 ---
 
 ## Step 8 — Git init
 
+**macOS / Linux / WSL / Git Bash:**
 ```bash
+cd ~/Claude-Projects/<group>/<slug>/
+git init -q
+git add .
+git commit -q -m "chore: initial React + TS + Vite + Tailwind v4 setup"
+```
+
+**Windows (PowerShell / cmd):**
+```powershell
+cd "$HOME\Claude-Projects\<group>\<slug>"
 git init -q
 git add .
 git commit -q -m "chore: initial React + TS + Vite + Tailwind v4 setup"
@@ -123,25 +154,55 @@ git commit -q -m "chore: initial React + TS + Vite + Tailwind v4 setup"
 
 ---
 
-## Step 9 — Notify Project Manager (if running)
+## Step 9 — Notify Project Manager
 
+**macOS / Linux / WSL / Git Bash:**
 ```bash
 curl -s http://localhost:3030/api/projects > /dev/null 2>&1 || true
 ```
 
-This is a no-op if no Project Manager is running.
+**Windows (PowerShell):**
+```powershell
+try { Invoke-WebRequest -Uri http://localhost:3030/api/projects -UseBasicParsing | Out-Null } catch {}
+```
 
 ---
 
-## Step 10 — Open Claude with Remote Control
+## Step 10 — Open Claude
 
+Open a new terminal window at the project path and launch Claude. Use the command for the user's OS:
+
+**macOS:**
 ```bash
 osascript \
-  -e "tell application \"Terminal\" to do script \"cd '<project_path>' && claude --remote-control '<slug>' '.'\"" \
+  -e "tell application \"Terminal\" to do script \"cd '$PROJECT_PATH' && claude\"" \
   -e "tell application \"Terminal\" to activate"
 ```
 
-If osascript fails (non-macOS), tell the user to run: `cd '<project_path>' && claude --remote-control '<slug>'`
+**Linux (gnome-terminal):**
+```bash
+gnome-terminal -- bash -c "cd '$PROJECT_PATH' && claude; exec bash" &
+```
+
+**Linux (xterm fallback):**
+```bash
+xterm -e "bash -c 'cd \"$PROJECT_PATH\" && claude; exec bash'" &
+```
+
+**Windows (PowerShell):**
+```powershell
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "Set-Location '$PROJECT_PATH'; claude"
+```
+
+**Windows (cmd):**
+```cmd
+start cmd /k "cd /d "%PROJECT_PATH%" && claude"
+```
+
+If the terminal can't be opened automatically, tell the user to run the following manually:
+```
+cd <PROJECT_PATH> && claude
+```
 
 ---
 
@@ -149,7 +210,6 @@ If osascript fails (non-macOS), tell the user to run: `cd '<project_path>' && cl
 
 Tell the user:
 - **Project:** display name
-- **Folder:** group name
-- **Path:** full absolute path
-- **Remote control:** `claude --remote-control '<slug>'` to reconnect from any device
-- **Tip:** type `/publish` in the new Claude session to push to GitHub when ready
+- **Folder:** friendly group name
+- **Path:** full path
+- **Tip:** type `/publish` in the new session to push to GitHub when ready
