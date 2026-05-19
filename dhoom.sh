@@ -366,6 +366,9 @@ while true; do
       else
         GROUP="${PICKER_ITEMS[$SEL]}"
         DISPLAY_GROUP=$(folder_display_name "$GROUP")
+        printf "\033[%d;1H\033[J" $(( _PICK_ROW + PICKER_LINES ))
+        echo ""
+        echo ""
         success "Dropping it in ${DISPLAY_GROUP}."
         break
       fi
