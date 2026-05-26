@@ -746,7 +746,7 @@ fi
 curl -s http://localhost:3030/api/projects > /dev/null 2>&1 || true
 
 # ── Step 10: Open Claude ───────────────────────────────────────────────────────
-_CMD="cd '$PROJECT_PATH' && claude --remote-control '$PROJECT_NAME' '.'"
+_CMD="cd '$PROJECT_PATH' && claude --remote-control='$PROJECT_NAME' -n '$DISPLAY_NAME'"
 case "$OSTYPE" in
   darwin*)
     osascript \
@@ -783,14 +783,14 @@ if [[ "$STACK" == "sketch" ]]; then
   echo -e "   ${CYAN}Folder:${RESET}   $DISPLAY_GROUP"
   echo -e "   ${CYAN}Path:${RESET}     $PROJECT_PATH"
   echo -e "   ${CYAN}Stack:${RESET}    HTML + Tailwind (CDN) + Inter + lucide"
-  echo -e "   ${CYAN}Remote:${RESET}   claude --remote-control '$PROJECT_NAME' (session name)"
+  echo -e "   ${CYAN}Remote:${RESET}   session named '$PROJECT_NAME' (display: $DISPLAY_NAME)"
   echo -e "   ${CYAN}Skill:${RESET}    /publish → push to GitHub Pages when ready"
 else
   echo -e "${GREEN}${BOLD}💥 dhoom! Go cook something great.${RESET}"
   echo -e "   ${CYAN}Project:${RESET}  $DISPLAY_NAME"
   echo -e "   ${CYAN}Folder:${RESET}   $DISPLAY_GROUP"
   echo -e "   ${CYAN}Path:${RESET}     $PROJECT_PATH"
-  echo -e "   ${CYAN}Remote:${RESET}   claude --remote-control '$PROJECT_NAME' (session name)"
+  echo -e "   ${CYAN}Remote:${RESET}   session named '$PROJECT_NAME' (display: $DISPLAY_NAME)"
   echo -e "   ${CYAN}Skill:${RESET}    /publish → push to GitHub when ready"
 fi
 echo ""
